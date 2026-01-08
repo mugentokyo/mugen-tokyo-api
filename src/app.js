@@ -5,8 +5,17 @@ import morgan from 'morgan';
 import routes from './routes/index.js';
 
 const app = express();
+
 app.use(helmet());
-app.use(cors());
+
+app.use(cors({
+  origin: ["https://mugen-tokyo.vercel.app"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true
+}));
+
+app.options('*', cors());
+
 app.use(express.json());
 app.use(morgan('dev'));
 
