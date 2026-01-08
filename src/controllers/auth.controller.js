@@ -43,7 +43,7 @@ exports.login = async (req, res) => {
 /**
  * REGISTER USER (ADMIN ONLY)
  */
-eexports.register = async (req, res) => {
+exports.register = async (req, res) => {
   try {
     const { username, password } = req.body;
 
