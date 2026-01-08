@@ -47,10 +47,6 @@ exports.register = async (req, res) => {
   try {
     const { username, password, adminSecret } = req.body;
 
-    if (adminSecret !== process.env.ADMIN_SECRET) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
     if (!username || !password) {
       return res.status(400).json({
         message: "Username dan password wajib diisi",

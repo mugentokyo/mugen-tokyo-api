@@ -9,7 +9,7 @@ const app = express();
 app.use(helmet());
 
 app.use(cors({
-  origin: ["https://mugen-tokyo.vercel.app"],
+  origin: ["https://mugen-tokyo.vercel.app", "http://localhost:5173"],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true
 }));

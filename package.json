@@ -26,6 +26,14 @@
     "@babel/cli": "^7.28.3",
     "@babel/core": "^7.28.5",
     "@babel/preset-env": "^7.28.5",
-    "nodemon": "^3.1.0"
-  }
+    "nodemon": "^3.1.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mugentokyo/mugen-tokyo-api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mugentokyo/mugen-tokyo-api/issues"
+  },
+  "homepage": "https://github.com/mugentokyo/mugen-tokyo-api#readme"
 }
