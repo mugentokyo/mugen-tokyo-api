@@ -43,13 +43,20 @@ exports.login = async (req, res) => {
 /**
  * REGISTER USER (ADMIN ONLY)
  */
-exports.register = async (req, res) => {
+eexports.register = async (req, res) => {
   try {
-    const { username, password, adminSecret } = req.body;
+    const { username, password } = req.body;
 
     if (!username || !password) {
       return res.status(400).json({
         message: "Username dan password wajib diisi",
+      });
+    }
+
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(409).json({
+        message: "Username sudah digunakan",
       });
     }
 
@@ -61,7 +68,7 @@ exports.register = async (req, res) => {
       role: "user",
     });
 
-    return res.json({
+    return res.status(201).json({
       message: "User berhasil dibuat",
       user: {
         id: user._id,
@@ -69,8 +76,9 @@ exports.register = async (req, res) => {
       },
     });
   } catch (err) {
-    return res.status(400).json({
-      message: "Username sudah digunakan",
+    console.error(err);
+    return res.status(500).json({
+      message: "Terjadi kesalahan server",
     });
   }
 };
