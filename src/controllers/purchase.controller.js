@@ -147,7 +147,7 @@ exports.updatePurchaseStatus = async (req, res) => {
 
 exports.getMemberPurchases = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = new mongoose.Types.ObjectId(req.user.id);
 
     const purchases = await Purchase.find({
       "user.userId": userId
@@ -155,7 +155,8 @@ exports.getMemberPurchases = async (req, res) => {
 
     res.json(purchases);
   } catch (err) {
-    console.error("GET MY PURCHASE ERROR:", err);
-    res.status(500).json({ message: "Gagal mengambil history pembelian" });
+    console.error("GET MEMBER PURCHASE ERROR:", err);
+    res.status(500).json({ message: "Gagal mengambil history" });
   }
 };
+
