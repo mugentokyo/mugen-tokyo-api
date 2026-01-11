@@ -30,6 +30,12 @@ const PurchaseSchema = new Schema(
         qty: Number,
       },
     ],
+    status: {
+      type: String,
+      enum: ["Belum Bayar", "Selesai", "Rejected"],
+      default: "Belum Bayar",
+    },
+    totalPrice: Number,
     totalItems: Number,
   },
   { timestamps: true }

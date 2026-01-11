@@ -3,7 +3,8 @@ const {
   getItems,
   addToCart,
   createItem,
-  addStock,
+  updateItem,
+  deleteItem,
 } = require("../controllers/item.controller");
 
 const router = Router();
@@ -11,6 +12,7 @@ const router = Router();
 router.get("/", getItems);
 router.post("/add-to-cart/:id", addToCart);
 router.post("/", createItem);
-router.put("/:id/add-stock", addStock);
+router.put("/:id", updateItem);
+router.delete("/:id", deleteItem);
 
 module.exports = router;

@@ -66,27 +66,47 @@ exports.createItem = async (req, res) => {
 /**
  * ADD STOCK
  */
-exports.addStock = async (req, res) => {
+exports.updateItem = async (req, res) => {
   try {
-    const { qty } = req.body;
-
-    if (!qty || qty <= 0) {
-      return res.status(400).json({ message: "Qty tidak valid" });
-    }
+    const { name, category, price, qty } = req.body;
 
     const item = await Item.findById(req.params.id);
     if (!item) {
       return res.status(404).json({ message: "Item tidak ditemukan" });
     }
 
-    item.stock += qty;
+    // 🔹 Update field jika dikirim
+    if (name !== undefined) item.name = name;
+    if (category !== undefined) item.category = category;
+    if (price !== undefined) item.price = price;
+
+    // 🔹 Update stok (qty = penambahan / pengurangan)
+    if (qty !== undefined) {
+      if (typeof qty !== "number") {
+        return res.status(400).json({ message: "Qty harus berupa angka" });
+      }
+
+      const newStock = qty;
+      if (newStock < 0) {
+        return res.status(400).json({ message: "Stok tidak boleh negatif" });
+      }
+
+      item.stock = newStock;
+    }
+
     await item.save();
 
     res.json({
-      message: "Stok berhasil ditambahkan",
+      message: "Item berhasil diperbarui",
       item,
     });
   } catch (err) {
-    res.status(500).json({ message: "Gagal menambahkan stok" });
+    console.error("UPDATE ITEM ERROR:", err);
+    res.status(500).json({ message: "Gagal memperbarui item" });
   }
+};
+
+exports.deleteItem = async (req, res) => {
+  await Item.findByIdAndDelete(req.params.id);
+  res.json({ message: "Item deleted" });
 };

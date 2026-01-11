@@ -2,7 +2,9 @@ const mongoose = require("mongoose");
 const Purchase = require("../models/Purchase");
 const Item = require("../models/Item");
 const User = require("../models/User");
+const { sendToDiscord } = require("../lib/discord.js");
 
+const THIRTY_DAYS = 1000 * 60 * 60 * 24 * 30;
 /**
  * GET ALL PURCHASES
  */
@@ -22,8 +24,6 @@ exports.getPurchases = async (_req, res) => {
  * CREATE PURCHASE
  */
 exports.createPurchase = async (req, res) => {
-  const session = await mongoose.startSession();
-
   try {
     const { user, items } = req.body;
 
@@ -31,70 +31,131 @@ exports.createPurchase = async (req, res) => {
       return res.status(400).json({ message: "Invalid payload" });
     }
 
-    session.startTransaction();
+    const userId = user.id;
 
-    const dbUser = await User.findById(user.id).session(session);
+    await Purchase.deleteMany({
+      "user.userId": userId,
+      createdAt: { $lt: new Date(Date.now() - THIRTY_DAYS) },
+    });
+
+    const dbUser = await User.findById(user.id);
     if (!dbUser) {
-      await session.abortTransaction();
       return res.status(400).json({ message: "User not found" });
     }
 
+    let totalPrice = 0;
+    let totalItems = 0;
+
     // VALIDASI STOK
     for (const i of items) {
-      const dbItem = await Item.findById(i.id).session(session);
+      const dbItem = await Item.findById(i.id);
       if (!dbItem) {
-        await session.abortTransaction();
         return res.status(400).json({ message: "Item tidak ditemukan" });
       }
       if (dbItem.stock < i.qty) {
-        await session.abortTransaction();
         return res.status(400).json({
           message: `Stok tidak cukup untuk ${dbItem.name}`,
         });
       }
+      totalItems += i.qty;
+      totalPrice += dbItem.price * i.qty;
     }
 
     // SIMPAN PURCHASE
-    const purchase = await Purchase.create(
-      [
-        {
-          user: {
-            userId: dbUser._id,
-            username: dbUser.username,
-            role: dbUser.role,
-          },
-          items: items.map((i) => ({
-            itemId: i.id,
-            name: i.name,
-            qty: i.qty,
-          })),
-          totalItems: items.reduce((a, b) => a + b.qty, 0),
-        },
-      ],
-      { session }
-    );
+    const purchase = await Purchase.create({
+      user: {
+        userId: dbUser._id,
+        username: dbUser.username,
+        role: dbUser.role,
+      },
+      items: items.map((i) => ({
+        itemId: i.id,
+        name: i.name,
+        qty: i.qty,
+      })),
+      status: "Belum Bayar",
+      totalItems,
+      totalPrice,
+    });
 
     // KURANGI STOK
     for (const i of items) {
-      await Item.findByIdAndUpdate(
-        i.id,
-        { $inc: { stock: -i.qty } },
-        { session }
-      );
+      await Item.findByIdAndUpdate(i.id, {
+        $inc: { stock: -i.qty },
+      });
     }
+    const usdFormatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    });
 
-    await session.commitTransaction();
-    session.endSession();
+    // 🔔 DISCORD NOTIFICATION
+    const date = new Date().toLocaleString("en-GB", {
+      timeZone: "Asia/Jakarta",
+    });
 
-    res.json({
+    const itemList = items
+      .map((i) => `• ${i.name} x ${i.qty}`)
+      .join("\n");
+
+    const message = `
+🛒 **TRANSAKSI BARU**
+👤 **${dbUser.username}**
+📦 Membeli:
+${itemList}
+🔢 Total Item: **${totalItems}**
+💰 Total Harga: **${usdFormatter.format(totalPrice)}**
+🕒 Tanggal: **${date}**
+`;
+    sendToDiscord(process.env.DISCORD_WEBHOOK_URL_PURCHASE, message);
+
+    return res.json({
       message: "Pembelian berhasil",
-      purchase: purchase[0],
+      purchase,
     });
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
-
     console.error("PURCHASE ERROR:", err);
-    res.status(500).json({ message: "Gagal menyimpan pembelian" });
+    return res.status(500).json({ message: "Gagal menyimpan pembelian" });
+  }
+};
+
+exports.updatePurchaseStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    if (!["Belum Bayar", "Selesai", "Rejected"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const purchase = await Purchase.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+
+    if (!purchase) {
+      return res.status(404).json({ message: "List Pembelian tidak ditemukan" });
+    }
+
+    res.json(purchase);
+  } catch (err) {
+    res.status(500).json({
+      message: "Gagal mengupdate status Pembelian",
+    });
+  }
+};
+
+exports.getMemberPurchases = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const purchases = await Purchase.find({
+      "user.userId": userId
+    }).sort({ createdAt: -1 });
+
+    res.json(purchases);
+  } catch (err) {
+    console.error("GET MY PURCHASE ERROR:", err);
+    res.status(500).json({ message: "Gagal mengambil history pembelian" });
   }
 };

@@ -1,5 +1,10 @@
 const PO = require("../models/PO");
+const User = require("../models/User");
+const Item = require("../models/Item");
+const generatePONumber = require("../utils/generatePONumber");
+const { sendToDiscord } = require("../lib/discord.js");
 
+const THIRTY_DAYS = 1000 * 60 * 60 * 24 * 30;
 /**
  * CREATE PO
  */
@@ -7,32 +12,89 @@ exports.createPO = async (req, res) => {
   try {
     const { user, items } = req.body;
 
-    if (!user || !items || items.length === 0) {
+    if (!user?.id || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Invalid PO data" });
     }
 
-    const poCount = await PO.countDocuments();
-    const poNumber = `PO-${String(poCount + 1).padStart(4, "0")}`;
+    const userId = user.id;
+
+    await PO.deleteMany({
+      "user.userId": userId,
+      createdAt: { $lt: new Date(Date.now() - THIRTY_DAYS) },
+    });
+
+    const dbUser = await User.findById(user.id);
+    if (!dbUser) {
+      return res.status(400).json({ message: "User tidak ditemukan" });
+    }
+    let totalItems = 0;
+    let totalPrice = 0;
+
+    for (const i of items) {
+      const dbItem = await Item.findById(i.id);
+      if (!dbItem) {
+        return res.status(400).json({ message: "Item tidak ditemukan" });
+      }
+      if (dbItem.stock < i.qty) {
+        return res.status(400).json({
+          message: `Stok tidak cukup untuk ${dbItem.name}`,
+        });
+      }
+      totalItems += i.qty;
+      totalPrice += dbItem.price * i.qty;
+    }
+
+    const poNumber = await generatePONumber();
 
     const po = await PO.create({
       poNumber,
-      user,
-      items: items.map((i) => ({
-        itemId: i._id,
+      user: {
+        username: dbUser.username, 
+        role: dbUser.role,         
+      },
+      items: items.map(i => ({
+        itemId: i.id,
         name: i.name,
-        kategori: i.kategori,
         qty: i.qty,
       })),
+      status: "pending",
+      totalItems: items.reduce((a, b) => a + b.qty, 0),
+      totalPrice,
     });
+
+    // 🔔 DISCORD NOTIFICATION
+    const date = new Date().toLocaleString("en-GB", {
+      timeZone: "Asia/Jakarta",
+    });
+
+    const usdFormatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    });
+
+    const itemList = items
+      .map((i) => `• ${i.name} x ${i.qty}`)
+      .join("\n");
+
+    const message = `
+      🛒 **PO BARU**
+      👤 **${dbUser.username}**
+      📦 Memesan:
+      ${itemList}
+      🔢 Total Item: **${totalItems}**
+      💰 Total Harga: **${usdFormatter.format(totalPrice)}**
+      🕒 Tanggal: **${date}**
+      `;
+
+    sendToDiscord(process.env.DISCORD_WEBHOOK_URL_PO, message);
 
     res.json({
       message: "PO berhasil dibuat",
       po,
     });
   } catch (err) {
-    res.status(500).json({
-      message: "Gagal membuat PO",
-    });
+    console.error("CREATE PO ERROR:", err);
+    res.status(500).json({ message: "Gagal membuat PO" });
   }
 };
 
@@ -76,5 +138,20 @@ exports.updatePOStatus = async (req, res) => {
     res.status(500).json({
       message: "Gagal mengupdate status PO",
     });
+  }
+};
+
+exports.getMemberPO = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const pos = await PO.find({
+      userId: userId
+    }).sort({ createdAt: -1 });
+
+    res.json(pos);
+  } catch (err) {
+    console.error("GET MY PO ERROR:", err);
+    res.status(500).json({ message: "Gagal mengambil history PO" });
   }
 };

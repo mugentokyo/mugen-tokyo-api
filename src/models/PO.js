@@ -25,6 +25,8 @@ const POSchema = new mongoose.Schema(
     },
 
     createdAt: { type: Date, default: Date.now },
+    totalItems: Number,
+    totalPrice: Number,
   },
   {
     collection: "list_PO",
